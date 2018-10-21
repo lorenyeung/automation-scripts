@@ -5,7 +5,7 @@
 # Author: Loren Y
 #
 
-SCRIPT_VERSION=v1.0.0
+SCRIPT_VERSION=v1.0.1
 SCRIPT_DIR=`dirname $0`
 PARENT_SCRIPT_DIR="$(dirname "$SCRIPT_DIR")"
 PARENT2_SCRIPT_DIR="$(dirname "$PARENT_SCRIPT_DIR")"
@@ -63,7 +63,6 @@ function .log () {
 linuxVersion() {
     echo "Finding out Linux distribution..."
     DIST=
-
     select install_type in "redhat" "centos" "debian" "ubuntu" "mac"; do
         case $install_type in
             redhat ) 
@@ -95,6 +94,18 @@ linuxVersion() {
 installPrerequisites() {
     installWget=false
     installCurl=false
+    installJq=false
+
+    type jq >/dev/null 2>&1 || { 
+        echo >&2 "I require jq but it's not installed. Do you want to install it now?"; 
+        select yn in "Yes" "No"; do
+            case $yn in
+                Yes ) installJq=true; break;;
+                No ) echo "Exiting..." ; exit;;
+            esac
+        done
+    }
+
     type wget >/dev/null 2>&1 || { 
         echo >&2 "I require wget but it's not installed. Do you want to install it now?";
         select yn in "Yes" "No"; do
@@ -128,32 +139,51 @@ installPrerequisites() {
                 type curl >/dev/null 2>&1 || { echo >&2 "Failed to install curl. Exiting..."; exit 1; }
                 echo "curl installed"
             fi
-            ## RHEL/CentOS 7 64-Bit ##
-            wget http://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-            rpm -ivh epel-release-latest-7.noarch.rpm
-            rm epel-release-latest-7.noarch.rpm
-            yum install jq -y
-            jq --version;;
+            if [ "$installJq" = true ]; then
+                ## RHEL/CentOS 7 64-Bit ##
+                wget http://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+                rpm -ivh epel-release-latest-7.noarch.rpm
+                rm epel-release-latest-7.noarch.rpm
+                yum install jq -y
+                jq --version
+            fi
+            ;;
         debian)
-        ;;
+            ;;
         ubuntu)
-        ;;
+            ;;
         mac)
-            brew install wget
-            brew install jq
-        ;;
+            if [ "$installWget" = true ]; then
+                brew install wget
+            fi
+            if [ "$installJq" = true ]; then
+                brew install jq
+            fi
+            ;;
         *)
-        echo "$DIST is not supported"
-        exit 1;;
+            echo "$DIST is not supported"
+            exit 1;;
     esac
 }
 
 start_artifactory () {
-    $ARTI_HOME/bin/artifactory.sh start;
+    case ${INSTALL_TYPE} in
+        Zip ) $ARTI_HOME/bin/artifactory.sh start; break;;
+        Service ) echo "Currently not supported"; exit;;
+        Docker ) echo "Currently not supported" ; exit;;
+        Debian ) service artifactory start; exit;;
+        RPM ) systemctl start artifactory.service; break;;
+    esac
 }
 
 stop_artifactory () {
-    $ARTI_HOME/bin/artifactory.sh stop;
+    case ${INSTALL_TYPE} in
+        Zip ) $ARTI_HOME/bin/artifactory.sh stop; break;;
+        Service ) echo "Currently not supported"; exit;;
+        Docker ) echo "Currently not supported" ; exit;;
+        Debian ) service artifactory stop; exit;;
+        RPM ) systemctl stop artifactory.service; break;;
+    esac
 }
 
 prerequisites() {
@@ -207,7 +237,7 @@ function set_up () {
         fi
     done
     while true; do
-        echo "Enter your Artifactory Directory location (e.g. /Users/loreny/artifactory):"
+        echo "Enter your Artifactory Downloads Directory location (e.g. /Users/loreny/artifactory):"
         read artis_dir
         if [ "$artis_dir" != "/" ]; then
             artis_dir=$(echo $artis_dir | sed 's:/*$::')
@@ -253,10 +283,6 @@ check_script() {
                     tar -xf $SCRIPT_DIR/download-$LATEST_SCRIPT_VERSION.tar.gz -C $PARENT2_SCRIPT_DIR/
                     cp -r $PARENT_SCRIPT_DIR/json $PARENT2_SCRIPT_DIR/automation-scripts-$LATEST_SCRIPT_TAG/json
                     echo "Last step: rm -r $PARENT_SCRIPT_DIR && mv $PARENT2_SCRIPT_DIR/automation-scripts-$LATEST_SCRIPT_TAG $PARENT_SCRIPT_DIR"
-                    
-                    
-                    
-                    
                     break;;
                 No ) echo "welp" ; break;;
             esac
@@ -265,17 +291,16 @@ check_script() {
     #rm $SCRIPT_DIR/.latest_version.txt     
 }
 
+if [ ! -f $PARENT_SCRIPT_DIR/json/metadata.json ]; then
+    echo "Welcome to Loren's automation scripts. Looks like its your first time running this set of scripts. You're on version $SCRIPT_VERSION. Creating $PARENT_SCRIPT_DIR/json/metadata.json..."
+    echo -e "{\"script_version\":\"$SCRIPT_VERSION\"}" > $PARENT_SCRIPT_DIR/json/metadata.json
+    # curl https://api.github.com/repos/lorenyeung/automation-scripts/releases/tags/v1.0.0
+fi
+
 if [ ! -f $PARENT_SCRIPT_DIR/json/artifactoryValues.json ]; then
     echo "Welcome to the Custom Artifactory commands master script. Please ensure that anonymous access is enabled."    
     linuxVersion
-    type jq >/dev/null 2>&1 || { echo >&2 "I require jq but it's not installed. Do you want to install it now?"; 
-        select yn in "Yes" "No"; do
-            case $yn in
-                Yes ) prerequisites; break;;
-                No ) echo "Exiting..." ; exit;;
-            esac
-        done
-    }
+    prerequisites
     echo "I could not find $DIR/artifactoryValues.json, generating:"
     set_up
 fi
@@ -284,6 +309,7 @@ ARTI_HOME=$(jq -r '.arti_home' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
 ARTI_URL=$(jq -r '.arti_url' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
 ARTI_CREDS=$(jq -r '"\(.username):\(.apikey)"' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
 apikey=$(jq -r '.apikey' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
+INSTALL_TYPE=$(jq -r '.install_type' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
 .log 7 "values_precheck_fn:apikey length value: ${#apikey}"
 if [ "$(curl -s $ARTI_URL/api/system/ping)" != "OK" ]; then
     echo "Artifactory is not running. Do you want to start Artifactory?"
@@ -330,7 +356,7 @@ case  "$1" in
    *)
         echo $"Usage: arti (commands ... )";
         echo "commands:";
-	echo "  check   = Check for latest script version and optionally upgrade";
+	    echo "  check   = Check for latest script version and optionally upgrade";
         echo "  upgrade = Upgrade Artifactory to latest, or a specified version";
         echo "  restart = Restart Artifactory";
         echo "  start   = Start Artifactory";
