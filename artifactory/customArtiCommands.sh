@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Purpose: Custom Artifactory Commands Script master
-# Requirements:  jq | Artifactory credentials
+# Requirements: jq | Artifactory credentials
 # Author: Loren Y
 #
 
