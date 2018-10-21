@@ -5,7 +5,7 @@
 # Author: Loren Y
 #
 
-SCRIPT_VERSION=v1.0.1
+SCRIPT_VERSION=v1.0.2
 SCRIPT_DIR=`dirname $0`
 PARENT_SCRIPT_DIR="$(dirname "$SCRIPT_DIR")"
 PARENT2_SCRIPT_DIR="$(dirname "$PARENT_SCRIPT_DIR")"
@@ -282,7 +282,7 @@ check_script() {
                     echo $PARENT_SCRIPT_DIR $PARENT2_SCRIPT_DIR 
                     tar -xf $SCRIPT_DIR/download-$LATEST_SCRIPT_VERSION.tar.gz -C $PARENT2_SCRIPT_DIR/
                     cp -r $PARENT_SCRIPT_DIR/json $PARENT2_SCRIPT_DIR/automation-scripts-$LATEST_SCRIPT_TAG/json
-                    echo "Last step: rm -r $PARENT_SCRIPT_DIR && mv $PARENT2_SCRIPT_DIR/automation-scripts-$LATEST_SCRIPT_TAG $PARENT_SCRIPT_DIR"
+                    echo "Last step: rm -r $PARENT_SCRIPT_DIR && mv $PARENT2_SCRIPT_DIR/automation-scripts-$LATEST_SCRIPT_TAG $PARENT_SCRIPT_DIR, and open a new shell :)"
                     break;;
                 No ) echo "welp" ; break;;
             esac
@@ -293,6 +293,9 @@ check_script() {
 
 if [ ! -f $PARENT_SCRIPT_DIR/json/metadata.json ]; then
     echo "Welcome to Loren's automation scripts. Looks like its your first time running this set of scripts. You're on version $SCRIPT_VERSION. Creating $PARENT_SCRIPT_DIR/json/metadata.json..."
+    if [ ! -d $PARENT_SCRIPT_DIR/json ]; then
+        mkdir $PARENT_SCRIPT_DIR/json
+    fi
     echo -e "{\"script_version\":\"$SCRIPT_VERSION\"}" > $PARENT_SCRIPT_DIR/json/metadata.json
     # curl https://api.github.com/repos/lorenyeung/automation-scripts/releases/tags/v1.0.0
 fi
