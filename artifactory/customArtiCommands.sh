@@ -1,11 +1,10 @@
 #!/bin/bash
 #
-# Purpose: Custom Artifactory Commands Script master
-# Requirements: jq | Artifactory credentials
+# Purpose: Custom Artifactory Commands Master Script
+# Requirements: jq | curl | wget | Artifactory credentials
 # Author: Loren Y
 #
 
-SCRIPT_VERSION=v1.0.4
 SCRIPT_DIR=`dirname $0`
 PARENT_SCRIPT_DIR="$(dirname "$SCRIPT_DIR")"
 PARENT2_SCRIPT_DIR="$(dirname "$PARENT_SCRIPT_DIR")"
@@ -60,112 +59,6 @@ function .log () {
     fi
 }
 
-linuxVersion() {
-    echo "Finding out Linux distribution..."
-    DIST=
-    select install_type in "redhat" "centos" "debian" "ubuntu" "mac"; do
-        case $install_type in
-            redhat ) 
-                grep -q -i "release 6" /etc/redhat-release >/dev/null 2>&1
-                if [ $? -eq 0 ]; then DIST_VER="6"; fi
-
-                grep -q -i "release 7" /etc/redhat-release >/dev/null 2>&1
-                if [ $? -eq 0 ]; then DIST_VER="7"; fi
-                DIST=redhat
-                break;;
-            centos ) 
-                cat /etc/*-release | grep -i centos > /dev/null
-                if [ $? -eq 0 ]; then DIST=centos; DIST_VER="7"; fi
-                break;;
-                debian )
-                DIST=debian
-                break;;
-            ubuntu )
-                DIST=ubuntu
-                break;;
-            mac ) 
-                DIST=mac
-                break;;
-        esac
-    done   
-    echo selected $DIST $DIST_VER.
-}
-
-installPrerequisites() {
-    installWget=false
-    installCurl=false
-    installJq=false
-
-    type jq >/dev/null 2>&1 || { 
-        echo >&2 "I require jq but it's not installed. Do you want to install it now?"; 
-        select yn in "Yes" "No"; do
-            case $yn in
-                Yes ) installJq=true; break;;
-                No ) echo "Exiting..." ; exit;;
-            esac
-        done
-    }
-
-    type wget >/dev/null 2>&1 || { 
-        echo >&2 "I require wget but it's not installed. Do you want to install it now?";
-        select yn in "Yes" "No"; do
-            case $yn in
-                Yes ) installWget=true; break;;
-                No ) echo "Exiting..." ; exit;;
-            esac
-        done
-    }
-
-    type curl >/dev/null 2>&1 || { 
-        echo >&2 "I require curl but it's not installed. Do you want to install it now?";
-        select yn in "Yes" "No"; do
-            case $yn in
-                Yes ) installCurl=true; break;;
-                No ) echo "Exiting..." ; exit;;
-            esac
-        done
-    }
-
-    case ${DIST} in
-        centos|redhat)
-            if [ "$installWget" = true ]; then
-                yum install -y wget
-                type wget >/dev/null 2>&1 || { echo >&2 "Failed to install wget. Exiting..."; exit 1; }
-                echo "wget installed"
-            fi
-            
-            if [ "$installCurl" = true ]; then
-                yum install -y curl
-                type curl >/dev/null 2>&1 || { echo >&2 "Failed to install curl. Exiting..."; exit 1; }
-                echo "curl installed"
-            fi
-            if [ "$installJq" = true ]; then
-                ## RHEL/CentOS 7 64-Bit ##
-                wget http://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-                rpm -ivh epel-release-latest-7.noarch.rpm
-                rm epel-release-latest-7.noarch.rpm
-                yum install jq -y
-                jq --version
-            fi
-            ;;
-        debian)
-            ;;
-        ubuntu)
-            ;;
-        mac)
-            if [ "$installWget" = true ]; then
-                brew install wget
-            fi
-            if [ "$installJq" = true ]; then
-                brew install jq
-            fi
-            ;;
-        *)
-            echo "$DIST is not supported"
-            exit 1;;
-    esac
-}
-
 start_artifactory () {
     case ${INSTALL_TYPE} in
         Zip ) $ARTI_HOME/bin/artifactory.sh start; break;;
@@ -184,16 +77,6 @@ stop_artifactory () {
         Debian ) service artifactory stop; exit;;
         RPM ) systemctl stop artifactory.service; break;;
     esac
-}
-
-prerequisites() {
-    echo "Is your Linux distribution $DIST $DIST_VER?"
-    select yn in "Yes" "No"; do
-        case $yn in
-            Yes ) installPrerequisites; break;;
-            No ) echo "Exiting..." ; exit;;
-        esac
-    done
 }
 
 function set_up () {
@@ -263,50 +146,15 @@ function set_up () {
     echo -e "{\"username\":\""$username"\", \"apikey\":\""$(echo $apikey | jq -r '.apiKey')"\", \"arti_home\":\""$arti_home"\", \"arti_url\":\""$arti_url"\", \"artis_dir\":\""$artis_dir"\", \"install_type\":\""$install_type"\"}" > $PARENT_SCRIPT_DIR/json/artifactoryValues.json
 }
 
-check_script() {
-    curl https://api.github.com/repos/lorenyeung/automation-scripts/releases/latest > $SCRIPT_DIR/.latest_version.txt
-    LATEST_SCRIPT_VERSION=$(jq -r '.tag_name' $SCRIPT_DIR/.latest_version.txt)
-    LATEST_SCRIPT_TAG=$(jq -r '.name' $SCRIPT_DIR/.latest_version.txt)
-    if [ "$SCRIPT_VERSION" = "$LATEST_SCRIPT_VERSION" ]; then
-        echo "You are on the latest version, which is $SCRIPT_VERSION."
-    else
-        echo "You are on $SCRIPT_VERSION, the latest script version is $LATEST_SCRIPT_VERSION. Would you like to upgrade?"
-        select yn in "Yes" "No"; do
-            case $yn in
-                Yes ) 
-                    echo "Downloading $LATEST_SCRIPT_VERSION";
-                    LATEST_SCRIPT_DL=$(jq -r '.tarball_url' $SCRIPT_DIR/.latest_version.txt)
-                    curl -L https://github.com/lorenyeung/automation-scripts/archive/$LATEST_SCRIPT_VERSION.tar.gz -o "$SCRIPT_DIR/download-$LATEST_SCRIPT_VERSION.tar.gz"
-                    echo "Extracting"
-
-                    echo $PARENT_SCRIPT_DIR $PARENT2_SCRIPT_DIR 
-                    tar -xf $SCRIPT_DIR/download-$LATEST_SCRIPT_VERSION.tar.gz -C $PARENT2_SCRIPT_DIR/
-                    echo "Updating metadata from $SCRIPT_VERSION to $LATEST_SCRIPT_VERSION"
-                    echo -e "{\"script_version\":\"$LATEST_SCRIPT_VERSION\"}" > $PARENT_SCRIPT_DIR/json/metadata.json
-                    cp -r $PARENT_SCRIPT_DIR/json $PARENT2_SCRIPT_DIR/automation-scripts-$LATEST_SCRIPT_TAG/json
-                    echo "Last step: rm -r $PARENT_SCRIPT_DIR && mv $PARENT2_SCRIPT_DIR/automation-scripts-$LATEST_SCRIPT_TAG $PARENT_SCRIPT_DIR, and open a new shell :)"
-                    break;;
-                No ) echo "welp" ; break;;
-            esac
-        done
-    fi
-    #rm $SCRIPT_DIR/.latest_version.txt     
-}
-
-if [ ! -f $PARENT_SCRIPT_DIR/json/metadata.json ]; then
-    echo "Welcome to Loren's automation scripts. Looks like its your first time running this set of scripts. You're on version $SCRIPT_VERSION. Creating $PARENT_SCRIPT_DIR/json/metadata.json..."
-    if [ ! -d $PARENT_SCRIPT_DIR/json ]; then
-        mkdir $PARENT_SCRIPT_DIR/json
-    fi
-    echo -e "{\"script_version\":\"$SCRIPT_VERSION\"}" > $PARENT_SCRIPT_DIR/json/metadata.json
-    # curl https://api.github.com/repos/lorenyeung/automation-scripts/releases/tags/v1.0.0
+if [ ! -d $PARENT_SCRIPT_DIR/json ]; then
+    mkdir $PARENT_SCRIPT_DIR/json
 fi
 
 if [ ! -f $PARENT_SCRIPT_DIR/json/artifactoryValues.json ]; then
-    echo "Welcome to the Custom Artifactory commands master script. Please ensure that anonymous access is enabled."    
-    linuxVersion
-    prerequisites
-    echo "I could not find $DIR/artifactoryValues.json, generating:"
+    SCRIPT_VERSION=$(jq -r .script_version $PARENT_SCRIPT_DIR/metadata.json)
+    echo "Welcome to Loren's Custom Artifactory commands master script. Please ensure that anonymous access is enabled. You're on version $SCRIPT_VERSION. Creating $PARENT_SCRIPT_DIR/json/..."
+    $PARENT_SCRIPT_DIR/common/installPrerequisites.sh
+    echo "I could not find $PARENT_SCRIPT_DIR/json/artifactoryValues.json, generating:"
     set_up
 fi
 
@@ -336,7 +184,7 @@ fi
 
 case  "$1" in
     check)
-	    check_script;;
+	    $PARENT_SCRIPT_DIR/common/upgradeScriptToLatest.sh;;
     upgrade)
         $SCRIPT_DIR/upgradeArtifactoryToLatest.sh;;
     restart)
