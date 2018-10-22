@@ -4,6 +4,14 @@
 # Requirements: jq | curl
 # Author: Loren Y
 #
+SCRIPT_DIR=`dirname $0`
+PARENT_SCRIPT_DIR="$(dirname "$SCRIPT_DIR")"
+PARENT2_SCRIPT_DIR="$(dirname "$PARENT_SCRIPT_DIR")"
+XRAY_HOME=$(jq -r '.xray_home' $PARENT_SCRIPT_DIR/json/xrayValues.json)
+XRAY_URL=$(jq -r '.xray_url' $PARENT_SCRIPT_DIR/json/xrayValues.json)
+XRAY_CREDS=$(jq -r '"\(.username):\(.password)"' $PARENT_SCRIPT_DIR/json/xrayValues.json)
+XRAY_DIR=$(jq -r '.xray_dir' $PARENT_SCRIPT_DIR/json/xrayValues.json)
+
 upgrade_xray () {
     echo "Downloading Xray $LATEST_VERSION's docker script..."
     curl -sL "https://bintray.com/jfrog/xray/download_file?agree=true&file_path=installer%2F$LATEST_VERSION%2Fxray" -o $XRAY_DIR/xray-$LATEST_VERSION.sh
@@ -13,7 +21,7 @@ upgrade_xray () {
     cp $XRAY_DIR/xray-$LATEST_VERSION.sh $XRAY_DIR/xray
     
     sleep 10
-    API_PING=$(curl -u $XRAY_USER:$XRAY_PASS $XRAY_URL/api/v1/system/ping | jq -r '.status');
+    API_PING=$(curl -u $XRAY_CREDS $XRAY_URL/api/v1/system/ping | jq -r '.status');
     if [ "$API_PING" = "pong" ]; then
     	echo "Xray $LATEST_VERSION is up, removing old Xray images..."
 	docker rmi docker.bintray.io/jfrog/xray-installer:$MY_VERSION
@@ -25,7 +33,7 @@ upgrade_xray () {
     	echo "Xray $LATEST_VERSION probably failed to start up. Time to check the logs friendo."
     fi
 }
-MY_VERSION=$(curl -s http://localhost:8000/api/v1/system/version | jq  -r '.xray_version')
+MY_VERSION=$(curl -s $XRAY_URL/api/v1/system/version | jq  -r '.xray_version')
 LATEST_VERSION=$(curl -s https://api.bintray.com/packages/jfrog/xray/xray-docker/versions/_latest | jq -r '.name')
 
 if [ "$MY_VERSION" = "$LATEST_VERSION" ]; then
