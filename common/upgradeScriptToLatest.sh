@@ -27,7 +27,8 @@ check_script() {
                     echo "Extracting"
                     echo $PARENT_SCRIPT_DIR $PARENT2_SCRIPT_DIR 
                     tar -xf $SCRIPT_DIR/download-$LATEST_SCRIPT_VERSION.tar.gz -C $PARENT2_SCRIPT_DIR/
-                    cp -r $PARENT_SCRIPT_DIR/json $PARENT2_SCRIPT_DIR/automation-scripts-$LATEST_SCRIPT_TAG
+                    mkdir $PARENT2_SCRIPT_DIR/automation-scripts-$LATEST_SCRIPT_TAG/json
+                    cp -r $PARENT_SCRIPT_DIR/json $PARENT2_SCRIPT_DIR/automation-scripts-$LATEST_SCRIPT_TAG/
                     cp $PARENT_SCRIPT_DIR/metadata.json $PARENT2_SCRIPT_DIR/automation-scripts-$LATEST_SCRIPT_TAG
                     file=$(jq -r '.script_version="'$LATEST_SCRIPT_VERSION'"' $PARENT2_SCRIPT_DIR/automation-scripts-$LATEST_SCRIPT_TAG/metadata.json)
                     echo $file > $PARENT2_SCRIPT_DIR/automation-scripts-$LATEST_SCRIPT_TAG/metadata.json
