@@ -146,10 +146,6 @@ function set_up () {
     echo -e "{\"username\":\""$username"\", \"apikey\":\""$(echo $apikey | jq -r '.apiKey')"\", \"arti_home\":\""$arti_home"\", \"arti_url\":\""$arti_url"\", \"artis_dir\":\""$artis_dir"\", \"install_type\":\""$install_type"\"}" > $PARENT_SCRIPT_DIR/json/artifactoryValues.json
 }
 
-if [ ! -d $PARENT_SCRIPT_DIR/json ]; then
-    mkdir $PARENT_SCRIPT_DIR/json
-fi
-
 if [ ! -f $PARENT_SCRIPT_DIR/json/artifactoryValues.json ]; then
     SCRIPT_VERSION=$(jq -r .script_version $PARENT_SCRIPT_DIR/metadata.json)
     echo "Welcome to Loren's Custom Artifactory commands master script. Please ensure that anonymous access is enabled. You're on version $SCRIPT_VERSION. Creating $PARENT_SCRIPT_DIR/json/..."

@@ -10,7 +10,10 @@ PARENT_SCRIPT_DIR="$(dirname "$SCRIPT_DIR")"
 PARENT2_SCRIPT_DIR="$(dirname "$PARENT_SCRIPT_DIR")"
 
 if [ ! -f $PARENT_SCRIPT_DIR/json/xrayValues.json ]; then
-echo "Could not find xrayValues.json, generating:"
+    SCRIPT_VERSION=$(jq -r .script_version $PARENT_SCRIPT_DIR/metadata.json)
+    echo "Welcome to Loren's Custom Xray commands master script. You're on version $SCRIPT_VERSION. Creating $PARENT_SCRIPT_DIR/json/..."
+    $PARENT_SCRIPT_DIR/common/installPrerequisites.sh
+    echo "Could not find xrayValues.json, generating:"
     while true; do
         echo "Enter your Xray URL (e.g. http://localhost:8000):"
         read xray_url

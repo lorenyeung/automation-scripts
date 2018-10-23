@@ -110,6 +110,9 @@ linuxDistro() {
     file=$(jq -r '.linux_distro="'$DIST'"' $PARENT_SCRIPT_DIR/metadata.json)
     echo $file > $PARENT_SCRIPT_DIR/metadata.json
 }
+if [ ! -d $PARENT_SCRIPT_DIR/json ]; then
+    mkdir $PARENT_SCRIPT_DIR/json
+fi
 
 LINUX_DISTRO=$(jq -r '.linux_distro' $PARENT_SCRIPT_DIR/metadata.json)
 if [ -z $LINUX_DISTRO ]; then
