@@ -62,7 +62,7 @@ installPrerequisites() {
     esac
     echo "Final preflight check:"
     for j in "${INSTALL_DEP[@]}"; do
-        type $j >/dev/null 2>&1 || { echo >&2 "I Failed to install $j. Exiting.."; exit 1 }
+        type $j >/dev/null 2>&1 || { echo >&2 "I Failed to install $j. Exiting.."; exit 1; }
     done
     file=$(jq -r '.installed_deps=true' $PARENT_SCRIPT_DIR/metadata.json)
     echo $file > $PARENT_SCRIPT_DIR/metadata.json
