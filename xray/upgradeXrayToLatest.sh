@@ -14,7 +14,7 @@ XRAY_DIR=$(jq -r '.xray_dir' $PARENT_SCRIPT_DIR/json/xrayValues.json)
 INSTALL_TYPE=$(jq -r '.install_type' $PARENT_SCRIPT_DIR/json/xrayValues.json)
 
 upgrade_xray () {
-    echo "Downloading Xray $INSTALL_TYPE's installation..."
+    echo "Downloading Xray's $INSTALL_TYPE installation..."
     case ${INSTALL_TYPE} in
         docker) 
             curl -sL "https://bintray.com/jfrog/xray/download_file?agree=true&file_path=installer%2F$LATEST_VERSION%2Fxray" -o $XRAY_DIR/xray-$LATEST_VERSION.sh
@@ -36,11 +36,10 @@ upgrade_xray () {
                 echo "Xray $LATEST_VERSION probably failed to start up. Time to check the logs friendo."
             fi
             break;;
-            # I wonder if this can be put into a variable instead of repeated 4 times..
         *) 
             curl -L "https://bintray.com/jfrog/xray/download_file?agree=true&file_path=xray-$INSTALL_TYPE-$LATEST_VERSION.tar.gz" -o $XRAY_DIR/xray-$INSTALL_TYPE-$LATEST_VERSION.tar.gz
             tar -xf $XRAY_DIR/xray-$INSTALL_TYPE-$LATEST_VERSION.tar.gz -C $XRAY_DIR
-            ./$XRAY_DIR/xray-$INSTALL_TYPE-$LATEST_VERSION/installXray-$INSTALL_TYPE.sh
+            .$XRAY_DIR/xray-$INSTALL_TYPE-$LATEST_VERSION/installXray-$INSTALL_TYPE.sh
             break;;
     esac
     
