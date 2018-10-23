@@ -51,14 +51,13 @@ echo "Could not find xrayValues.json, generating:"
         fi  
     done
     echo "Select your Xray installation type:"
-    select install_type in "Zip" "Docker" "Centos" "Debian" "Redhat" "Ubuntu"; do
+    select install_type in "docker" "centos" "debian" "redhat" "ubuntu"; do
         case $install_type in
-            Zip ) echo "Currently not supported"; exit;;
-            Docker ) break;;
-            Centos ) echo "Currently not supported" ; exit;;
-            Debian ) echo "Currently not supported"; exit;;
-            Redhat ) echo "Currently not supported" ; exit;;
-            Ubuntu ) echo "Currently not supported"; exit;;
+            docker ) break;;
+            centos ) break;;
+            debian ) break;;
+            redhat ) break;;
+            ubuntu ) break;;
         esac
     done
     echo "Creating $PARENT_SCRIPT_DIR/json/xrayValues.json"
