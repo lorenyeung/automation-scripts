@@ -39,7 +39,7 @@ upgrade_xray () {
         *) 
             curl -L "https://bintray.com/jfrog/xray/download_file?agree=true&file_path=xray-$INSTALL_TYPE-$LATEST_VERSION.tar.gz" -o $XRAY_DIR/xray-$INSTALL_TYPE-$LATEST_VERSION.tar.gz
             tar -xf $XRAY_DIR/xray-$INSTALL_TYPE-$LATEST_VERSION.tar.gz -C $XRAY_DIR
-            .$XRAY_DIR/xray-$INSTALL_TYPE-$LATEST_VERSION/installXray-$INSTALL_TYPE.sh
+            $XRAY_DIR/xray-$INSTALL_TYPE-$LATEST_VERSION/installXray-$INSTALL_TYPE.sh
             break;;
     esac
     
