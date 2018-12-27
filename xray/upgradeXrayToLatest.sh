@@ -23,17 +23,23 @@ upgrade_xray () {
             $XRAY_DIR/xray-$LATEST_VERSION.sh start all
             cp $XRAY_DIR/xray-$LATEST_VERSION.sh $XRAY_DIR/xray
             
-            sleep 10
-            API_PING=$(curl -u $XRAY_CREDS $XRAY_URL/api/v1/system/ping | jq -r '.status');
-            if [ "$API_PING" = "pong" ]; then
+            GREENLIGHT=$(curl -su $XRAY_CREDS $XRAY_URL/api/v1/system/ping | jq -r '.status');
+            while [ "$GREENLIGHT" != "pong" ]; do
+                GREENLIGHT=$(curl -su $XRAY_CREDS $XRAY_URL/api/v1/system/ping | jq -r '.status')
+                echo "Time spent waiting for Xray to start:$TIMER seconds..."
+                TIMER=$((TIMER + 2))
+                sleep 2
+                if [ "$TIMER" -gt 60 ]; then
+                    echo "Xray $LATEST_VERSION probably failed to start up. Time to check the logs friendo."
+                fi
+	        done
+            if [ "$GREENLIGHT" = "pong" ]; then
                 echo "Xray $LATEST_VERSION is up, removing old Xray images..."
                 docker rmi docker.bintray.io/jfrog/xray-installer:$MY_VERSION
                 docker rmi docker.bintray.io/jfrog/xray-analysis:$MY_VERSION
                 docker rmi docker.bintray.io/jfrog/xray-persist:$MY_VERSION
                 docker rmi docker.bintray.io/jfrog/xray-indexer:$MY_VERSION
                 docker rmi docker.bintray.io/jfrog/xray-server:$MY_VERSION
-            else
-                echo "Xray $LATEST_VERSION probably failed to start up. Time to check the logs friendo."
             fi
             break;;
         *) 

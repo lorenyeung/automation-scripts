@@ -33,6 +33,7 @@ upgrade_artifactory () {
 		echo "Standalone Artifactory detected, continuing.."
 	fi
 	# TODO expired license check
+	# TODO maybe another check for linux commands before the wget
 	echo "Stopping Artifactory $MY_VERSION..."
 	case ${INSTALL_TYPE} in
         Zip ) 
@@ -41,14 +42,14 @@ upgrade_artifactory () {
 			wget "https://dl.bintray.com/jfrog/artifactory-pro/org/artifactory/pro/jfrog-artifactory-pro/$LATEST_VERSION/jfrog-artifactory-pro-$LATEST_VERSION.zip" -O $ARTIS_DIR/jfrog-artifactory-pro-$LATEST_VERSION.zip
 			echo "Unzipping Artifactory $LATEST_VERSION"
 			unzip -qq $ARTIS_DIR/jfrog-artifactory-pro-$LATEST_VERSION.zip -d $ARTIS_DIR/
-			break;;
+			;;
         Service ) echo "Currently not supported"; exit;;
         Docker ) echo "Currently not supported"; exit;;
         Debian ) service artifactory stop; exit;;
         RPM ) 
 			systemctl stop artifactory.service; 
 			wget "https://dl.bintray.com/jfrog/artifactory-pro-rpms/org/artifactory/pro/rpm/jfrog-artifactory-pro/$LATEST_VERSION/jfrog-artifactory-pro-$LATEST_VERSION.rpm" -O $ARTIS_DIR/jfrog-artifactory-pro-$LATEST_VERSION.rpm
-			break;;
+			;;
     esac
 	STOP_CHECK=$(curl -su $ARTI_CREDS $ARTI_URL/api/system/ping)
 	if [ "$STOP_CHECK" = "OK" ]; then
@@ -67,22 +68,23 @@ upgrade_artifactory () {
 				sed -i '' "s|/export/path|$ARTIS_DIR/artifactory-pro-latest-backup|" $SCRIPT_DIR/export-settings.json
 				# cat $SCRIPT_DIR/export-settings.json # for debugging purposes
 				curl -X POST -su $ARTI_CREDS $ARTI_URL/api/export/system -H "Content-Type: application/json" -T $SCRIPT_DIR/export-settings.json 
-				break;;
-			No ) echo "I hope you know what you are doing." ; break;;
+				;;
+			No ) echo "I hope you know what you are doing.";
+			;;
 		esac
 	done
 	
 	echo "Upgrading Artifactory $MY_VERSION to $LATEST_VERSION..."
 	case ${INSTALL_TYPE} in
         Zip ) 
-			#TODO need a way to preserve file settings in tomcat and bin
+			#TODO HA zip upgrade - need to consider JDBC driver, server.xml, artifactory.default file for zip install.
 			rm -r $ARTI_HOME/bin/ $ARTI_HOME/misc/ $ARTI_HOME/webapps/ $ARTI_HOME/tomcat/
 			cp -r $ARTIS_DIR/artifactory-pro-$LATEST_VERSION/bin $ARTIS_DIR/artifactory-pro-$LATEST_VERSION/misc $ARTIS_DIR/artifactory-pro-$LATEST_VERSION/webapps $ARTIS_DIR/artifactory-pro-$LATEST_VERSION/tomcat $ARTI_HOME/
 			 echo "Starting Artifactory $LATEST_VERSION..."
 			$ARTI_HOME/bin/artifactory.sh start
 			rm -r $ARTIS_DIR/artifactory-pro-$LATEST_VERSION
 			rm $ARTIS_DIR/jfrog-artifactory-pro-$LATEST_VERSION.zip
-			break;;
+			;;
         Service ) echo "Currently not supported"; exit;;
         Docker ) echo "Currently not supported"; exit;;
         Debian ) echo "Currently not supported"; exit;;
@@ -91,7 +93,7 @@ upgrade_artifactory () {
 			echo "Starting Artifactory $LATEST_VERSION..."
 			systemctl start artifactory.service;
 			rm $ARTIS_DIR/jfrog-artifactory-pro-$LATEST_VERSION.rpm
-			break;;
+			;;
     esac
 	
 	echo "Pinging Artifactory..."
@@ -102,7 +104,7 @@ upgrade_artifactory () {
 		echo "Time spent waiting for Artifactory to start:$TIMER seconds..."
 		TIMER=$((TIMER + 2))
 		sleep 2
-        done
+	done
 	echo "Artifactory Status: $GREENLIGHT"
 	if [ "$GREENLIGHT" = "OK" ]; then
 		if [ "$BACKUP_CHECK" = "TRUE" ]; then
@@ -127,20 +129,23 @@ if [ "$MY_VERSION" != "$LATEST_VERSION" ]; then
 	echo "You are on $MY_VERSION, the latest is $LATEST_VERSION, would you like to upgrade now?";
 	select yn in "Yes" "No" "Different Version"; do
 		case $yn in
-			Yes ) upgrade_artifactory; break;;
-			No ) echo "Exiting..." ; exit;;
+			Yes ) 
+				upgrade_artifactory;;
+			No ) 
+				echo "Exiting..." ; exit;;
 			"Different Version" )
-			while true; do
-				echo "Enter desired Artifactory Version:"; 
-				read LATEST_VERSION;
-				VERSION_EXISTS=$(curl -i https://dl.bintray.com/jfrog/artifactory-pro/org/artifactory/pro/jfrog-artifactory-pro/$LATEST_VERSION/jfrog-artifactory-pro-$LATEST_VERSION.zip)
-				if [[ $VERSION_EXISTS == *"404"* ]]; then
-					echo "$LATEST_VERSION does not exist on Bintray. Please try again."
-				else
-					break;
-				fi
-			done
-			upgrade_artifactory; break;;
+				while true; do
+					echo "Enter desired Artifactory Version:"; 
+					read LATEST_VERSION;
+					VERSION_EXISTS=$(curl -i https://dl.bintray.com/jfrog/artifactory-pro/org/artifactory/pro/jfrog-artifactory-pro/$LATEST_VERSION/jfrog-artifactory-pro-$LATEST_VERSION.zip)
+					if [[ $VERSION_EXISTS == *"404"* ]]; then
+						echo "$LATEST_VERSION does not exist on Bintray. Please try again."
+					else
+						break;
+					fi
+				done
+				upgrade_artifactory
+				;;
 		esac
 	done
 fi

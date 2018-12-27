@@ -160,12 +160,12 @@ ARTI_CREDS=$(jq -r '"\(.username):\(.apikey)"' $PARENT_SCRIPT_DIR/json/artifacto
 apikey=$(jq -r '.apikey' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
 INSTALL_TYPE=$(jq -r '.install_type' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
 .log 7 "values_precheck_fn:apikey length value: ${#apikey}"
-if [ "$(curl -s $ARTI_URL/api/system/ping)" != "OK" ]; then
+if [ "$(curl -su $ARTI_CREDS $ARTI_URL/api/system/ping)" != "OK" ]; then
     echo "Artifactory is not running. Do you want to start Artifactory?"
     select yn in "Yes" "No"; do
         case $yn in
-            Yes ) start_artifactory; break;;
-            No ) echo "You may run into unintended behaviour..." ; break;;
+            Yes ) start_artifactory; exit;;
+            No ) echo "You may run into unintended behaviour..." ;;
         esac
     done
 elif [ "$(curl -su $ARTI_CREDS $ARTI_URL/api/system/ping)" != "OK" ]; then

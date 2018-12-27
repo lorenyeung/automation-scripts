@@ -24,8 +24,7 @@ check_script() {
                     echo "Downloading $LATEST_SCRIPT_VERSION";
                     LATEST_SCRIPT_DL=$(jq -r '.tarball_url' $SCRIPT_DIR/.latestVersion.txt)
                     curl -sL https://github.com/lorenyeung/automation-scripts/archive/$LATEST_SCRIPT_VERSION.tar.gz -o "$SCRIPT_DIR/download-$LATEST_SCRIPT_VERSION.tar.gz"
-                    echo "Extracting"
-                    echo $PARENT_SCRIPT_DIR $PARENT2_SCRIPT_DIR 
+                    echo "Extracting update"
                     tar -xf $SCRIPT_DIR/download-$LATEST_SCRIPT_VERSION.tar.gz -C $PARENT2_SCRIPT_DIR/
                     mkdir $PARENT2_SCRIPT_DIR/automation-scripts-$LATEST_SCRIPT_TAG/json
                     cp -r $PARENT_SCRIPT_DIR/json $PARENT2_SCRIPT_DIR/automation-scripts-$LATEST_SCRIPT_TAG/

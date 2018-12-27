@@ -60,10 +60,11 @@ installPrerequisites() {
             echo "$DIST is not supported"
             exit 1;;
     esac
-    echo "Final preflight check:"
+    echo "Final preflight check..."
     for j in "${INSTALL_DEP[@]}"; do
         type $j >/dev/null 2>&1 || { echo >&2 "I Failed to install $j. Exiting.."; exit 1; }
     done
+    echo "Looks good from here. Updating metadata.json to reflect this."
     file=$(jq -r '.installed_deps=true' $PARENT_SCRIPT_DIR/metadata.json)
     echo $file > $PARENT_SCRIPT_DIR/metadata.json
 }
