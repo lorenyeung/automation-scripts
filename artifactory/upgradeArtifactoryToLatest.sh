@@ -15,6 +15,7 @@ LATEST_VERSION=$(curl -s https://api.bintray.com/packages/jfrog/artifactory-pro/
 ARTI_HOME=$(jq -r '.arti_home' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
 ARTIS_DIR=$(jq -r '.artis_dir' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
 INSTALL_TYPE=$(jq -r '.install_type' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
+EXTERNAL_DB_JAR=$(jq -r '.external_db_jar' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
 
 upgrade_artifactory () {
 	HA_CHECK=FALSE
@@ -60,7 +61,7 @@ upgrade_artifactory () {
     BACKUP_CHECK=FALSE
     select yn in "Yes" "No"; do
 		case $yn in
-			Yes ) 
+			Yes) 
 				BACKUP_CHECK=TRUE; 
 				echo "Backing up Artifactory $MY_VERSION to $ARTIS_DIR/artifactory-pro-latest-backup";
 				mkdir $ARTIS_DIR/artifactory-pro-latest-backup
@@ -69,18 +70,30 @@ upgrade_artifactory () {
 				# cat $SCRIPT_DIR/export-settings.json # for debugging purposes
 				curl -X POST -su $ARTI_CREDS $ARTI_URL/api/export/system -H "Content-Type: application/json" -T $SCRIPT_DIR/export-settings.json 
 				;;
-			No ) echo "I hope you know what you are doing.";
-			;;
+			No)
+				echo "I hope you know what you are doing.";
+				break;
+				;;
 		esac
 	done
-	
+	if [ "$EXTERNAL_DB_JAR" != "none" ]; then
+		echo "Backing up JDBC Driver $EXTERNAL_DB_JAR"
+		cp $EXTERNAL_DB_JAR $ARTIS_DIR	
+	fi
 	echo "Upgrading Artifactory $MY_VERSION to $LATEST_VERSION..."
 	case ${INSTALL_TYPE} in
         Zip ) 
-			#TODO HA zip upgrade - need to consider JDBC driver, server.xml, artifactory.default file for zip install.
+			echo "STOP HERE"
+			exit 
+			#TODO HA zip upgrade - need to consider server.xml, artifactory.default file for zip install.
 			rm -r $ARTI_HOME/bin/ $ARTI_HOME/misc/ $ARTI_HOME/webapps/ $ARTI_HOME/tomcat/
 			cp -r $ARTIS_DIR/artifactory-pro-$LATEST_VERSION/bin $ARTIS_DIR/artifactory-pro-$LATEST_VERSION/misc $ARTIS_DIR/artifactory-pro-$LATEST_VERSION/webapps $ARTIS_DIR/artifactory-pro-$LATEST_VERSION/tomcat $ARTI_HOME/
 			 echo "Starting Artifactory $LATEST_VERSION..."
+			if [ "$EXTERNAL_DB_JAR" != "none" ]; then
+				echo "Restoring JDBC Driver $EXTERNAL_DB_JAR"
+				JAR_FILE=$(basename $EXTERNAL_DB_JAR)
+				cp $ARTIS_DIR/$JAR_FILE $ARTI_HOME/tomcat/lib/
+			fi
 			$ARTI_HOME/bin/artifactory.sh start
 			rm -r $ARTIS_DIR/artifactory-pro-$LATEST_VERSION
 			rm $ARTIS_DIR/jfrog-artifactory-pro-$LATEST_VERSION.zip
@@ -90,11 +103,17 @@ upgrade_artifactory () {
         Debian ) echo "Currently not supported"; exit;;
         RPM ) 
 			rpm -U $ARTIS_DIR/jfrog-artifactory-pro-$LATEST_VERSION.rpm
+			if [ "$EXTERNAL_DB_JAR" != "none" ]; then
+				echo "Restoring JDBC Driver $EXTERNAL_DB_JAR"
+				JAR_FILE=$(basename $EXTERNAL_DB_JAR)
+				cp $ARTIS_DIR/$JAR_FILE /opt/jfrog/artifactory/tomcat/lib/	
+			fi
 			echo "Starting Artifactory $LATEST_VERSION..."
 			systemctl start artifactory.service;
 			rm $ARTIS_DIR/jfrog-artifactory-pro-$LATEST_VERSION.rpm
 			;;
     esac
+
 	
 	echo "Pinging Artifactory..."
 	GREENLIGHT=$(curl -su $ARTI_CREDS $ARTI_URL/api/system/ping)

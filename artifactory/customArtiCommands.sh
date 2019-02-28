@@ -81,8 +81,10 @@ stop_artifactory () {
 
 function set_up () {
     while true; do
+        echo "For the following questions, you can hit enter if you want to use the default values inside the parentheses."
         echo "Enter your Artifactory URL (e.g. http://localhost:8081/artifactory):"
         read arti_url
+        arti_url=${arti_url:-http://localhost:8081/artifactory}
         if [ "$(curl -s $arti_url/api/system/ping)" != "OK" ]; then
             echo "Artifactory doesn't look to be either running or reachable from here."
         else
@@ -90,10 +92,12 @@ function set_up () {
         fi
     done
     while true; do
-        echo "Enter your $arti_url username:"
+        echo "Enter your $arti_url username (e.g. admin):"
         read username
-        echo "Enter your $arti_url password:"
+        username=${username:-admin}
+        echo "Enter your $arti_url password (e.g. password):"
         read -s password
+        password=${password:-password}
         echo "Getting API key..."
         apikey=$(curl -su $username:$password $arti_url/api/security/apiKey)
         if [ "${#apikey}" == "2" ]; then
@@ -107,9 +111,11 @@ function set_up () {
             break
         fi
     done
+    HOME_DIR=$(eval echo "~$USER")
     while true; do
-        echo "Enter your \$ARTIFACTORY_HOME location (e.g. /Users/loreny/artifactory/artifactory-pro-latest):"
+        echo "Enter your \$ARTIFACTORY_HOME location (e.g. $HOME_DIR/artifactory/artifactory-pro-latest):"
         read arti_home
+        arti_home=${arti_home:-$HOME_DIR/artifactory/artifactory-pro-latest}
         if [ "$arti_home" != "/" ]; then
             arti_home=$(echo $arti_home | sed 's:/*$::')
         fi
@@ -120,8 +126,9 @@ function set_up () {
         fi
     done
     while true; do
-        echo "Enter your Artifactory Downloads Directory location (e.g. /Users/loreny/artifactory):"
+        echo "Enter your Artifactory Downloads Directory location (e.g. $HOME_DIR/artifactory):"
         read artis_dir
+        artis_dir=${artis_dir:-$HOME_DIR/artifactory}
         if [ "$artis_dir" != "/" ]; then
             artis_dir=$(echo $artis_dir | sed 's:/*$::')
         fi
@@ -131,19 +138,52 @@ function set_up () {
             break
         fi
     done
-
     echo "Select your Artifactory installation type:"
     select install_type in "Zip" "Service" "Docker" "Debian" "RPM"; do
         case $install_type in
             Zip ) break;;
-                Service ) echo "Currently not supported"; exit;;
-                Docker ) echo "Currently not supported" ; exit;;
+            Service ) echo "Currently not supported"; exit;;
+            Docker ) echo "Currently not supported" ; exit;;
             Debian ) echo "Currently not supported"; exit;;
             RPM ) break;;
         esac
     done
+    while true; do
+        echo "Do you have an external Database?"
+        select db_type in "Yes" "No"; do
+            case $db_type in
+                Yes )
+                    echo "Whats the name of your JDBC driver? If its not listed here please place it in your \$ARTIFACTORY_HOME/tomcat/lib/ directory and restart the script:"
+                    if [ "$install_type" == "Zip" ]; then
+                        libs=($(ls $arti_home/tomcat/lib/))
+                        libs_path="$arti_home/tomcat/lib/"
+                    else
+                        libs=($(ls /opt/jfrog/artifactory/tomcat/lib/))
+                        libs_path="/opt/jfrog/artifactory/tomcat/lib/"
+                    fi
+                    select ext_db_jar in "${libs[@]}"; do
+                        echo "You have selected $ext_db_jar"
+                        ext_db_jar=$libs_path$ext_db_jar
+                        break
+                    done
+                    break;
+                    ;;
+                No )
+                    ext_db_jar="none" 
+                    break;;
+            esac
+        done
+        if [ "$artis_dir" != "/" ]; then
+            artis_dir=$(echo $artis_dir | sed 's:/*$::')
+        fi
+        if [ ! -d "$artis_dir" ]; then
+            echo "$artis_dir doesnt exist."
+        else
+            break
+        fi
+    done
     echo "Creating $PARENT_SCRIPT_DIR/json/artifactoryValues.json"
-    echo -e "{\"username\":\""$username"\", \"apikey\":\""$(echo $apikey | jq -r '.apiKey')"\", \"arti_home\":\""$arti_home"\", \"arti_url\":\""$arti_url"\", \"artis_dir\":\""$artis_dir"\", \"install_type\":\""$install_type"\"}" > $PARENT_SCRIPT_DIR/json/artifactoryValues.json
+    echo -e "{\"username\":\""$username"\", \"apikey\":\""$(echo $apikey | jq -r '.apiKey')"\", \"arti_home\":\""$arti_home"\", \"arti_url\":\""$arti_url"\", \"artis_dir\":\""$artis_dir"\", \"install_type\":\""$install_type"\", \"external_db_jar\":\""$ext_db_jar"\"}" > $PARENT_SCRIPT_DIR/json/artifactoryValues.json
 }
 
 if [ ! -f $PARENT_SCRIPT_DIR/json/artifactoryValues.json ]; then
@@ -159,13 +199,20 @@ ARTI_URL=$(jq -r '.arti_url' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
 ARTI_CREDS=$(jq -r '"\(.username):\(.apikey)"' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
 apikey=$(jq -r '.apikey' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
 INSTALL_TYPE=$(jq -r '.install_type' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
+EXTERNAL_DB_JAR=$(jq -r '.external_db_jar' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
 .log 7 "values_precheck_fn:apikey length value: ${#apikey}"
 if [ "$(curl -su $ARTI_CREDS $ARTI_URL/api/system/ping)" != "OK" ]; then
     echo "Artifactory is not running. Do you want to start Artifactory?"
     select yn in "Yes" "No"; do
         case $yn in
-            Yes ) start_artifactory; exit;;
-            No ) echo "You may run into unintended behaviour..." ;;
+            Yes)
+                start_artifactory; 
+                exit
+            ;;
+            No) 
+                echo "You may run into unintended behaviour...";
+                break
+                ;;
         esac
     done
 elif [ "$(curl -su $ARTI_CREDS $ARTI_URL/api/system/ping)" != "OK" ]; then
