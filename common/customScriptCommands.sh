@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Purpose: Custom Script Commands Master Script
-# Requirements: jq | curl | Xray credentials
+# Requirements: none
 # Author: Loren Y
 #
 
