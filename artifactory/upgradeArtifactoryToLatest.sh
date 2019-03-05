@@ -6,11 +6,18 @@ ARTI_CREDS=$(jq -r '"\(.username):\(.apikey)"' $PARENT_SCRIPT_DIR/json/artifacto
 ARTI_URL=$(jq -r '.arti_url' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
 INIT_CHECK=$(curl -su $ARTI_CREDS $ARTI_URL/api/system/ping)
 if [ "$INIT_CHECK" != "OK" ]; then
-	echo "Artifactory is not running, exiting..."
-	exit
+    echo "$(date) Artifactory is not running, checking for auto upgrade" | tee -a $PARENT_SCRIPT_DIR/automate.log
+        # probably need a check for serviceValues.json
+        MY_VERSION=$(jq -r '.artifactory' $PARENT_SCRIPT_DIR/json/serviceValues.json)
+        if [ ! -z "$MY_VERSION" ]; then
+            echo "$(date) Last version is $MY_VERSION" | tee -a $PARENT_SCRIPT_DIR/automate.log
+        else  
+	    	echo "Artifactory is not running and serviceValues.json is empty, exiting..." 
+	    	exit
+        fi
+else 
+    MY_VERSION=$(curl -su $ARTI_CREDS $ARTI_URL/api/system/version | jq -r '.version')
 fi
-
-MY_VERSION=$(curl -su $ARTI_CREDS $ARTI_URL/api/system/version | jq -r '.version')
 LATEST_VERSION=$(curl -s https://api.bintray.com/packages/jfrog/artifactory-pro/jfrog-artifactory-pro-zip/versions/_latest | jq -r '.name')
 ARTI_HOME=$(jq -r '.arti_home' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
 ARTIS_DIR=$(jq -r '.artis_dir' $PARENT_SCRIPT_DIR/json/artifactoryValues.json)
@@ -19,29 +26,34 @@ EXTERNAL_DB_JAR=$(jq -r '.external_db_jar' $PARENT_SCRIPT_DIR/json/artifactoryVa
 
 upgrade_artifactory () {
 	HA_CHECK=FALSE
-	UI_CHECK=$(curl -su $ARTI_CREDS $ARTI_URL/ui/highAvailability)
-	if [ "$UI_CHECK" != "[]" ]; then
-		HA_CHECK=TRUE
-		echo "HA Artifactory Cluster detected, performing pre-requisite primary version check.."
-		PRIMARY_VERSION=$(curl -su $ARTI_CREDS $ARTI_URL/ui/highAvailability | jq -r '.[] | select(.role=="Primary") | .version')
-		NODE_ROLE=$(grep "primary" $ARTI_HOME/etc/ha-node.properties)
-		echo $NODE_ROLE
-		if [[ "$NODE_ROLE" = *"false"* ]] && [ "$MY_VERSION" = "$PRIMARY_VERSION" ]; then
-			echo "It looks like you're trying to upgrade the member node ($MY_VERSION) first, please upgrade the primary first"
-			exit
-		fi
-	else
-		echo "Standalone Artifactory detected, continuing.."
+        AUTO_CHECK=$(jq -r '.artifactory' $PARENT_SCRIPT_DIR/json/serviceValues.json)
+        if [ ! -z "$AUTO_CHECK" ]; then
+            UI_CHECK="[]" #assume primary/standalone for now
+        else
+	    	UI_CHECK=$(curl -su $ARTI_CREDS $ARTI_URL/ui/highAvailability)
+        fi
+        if [ "$UI_CHECK" != "[]" ]; then
+			HA_CHECK=TRUE
+			echo "$(date) HA Artifactory Cluster detected, performing pre-requisite primary version check.." | tee -a $PARENT_SCRIPT_DIR/automate.log
+			PRIMARY_VERSION=$(curl -su $ARTI_CREDS $ARTI_URL/ui/highAvailability | jq -r '.[] | select(.role=="Primary") | .version')
+			NODE_ROLE=$(grep "primary" $ARTI_HOME/etc/ha-node.properties)
+			echo $NODE_ROLE
+			if [[ "$NODE_ROLE" = *"false"* ]] && [ "$MY_VERSION" = "$PRIMARY_VERSION" ]; then
+				echo "$(date) It looks like you're trying to upgrade the member node ($MY_VERSION) first, please upgrade the primary first" | tee -a $PARENT_SCRIPT_DIR/automate.log
+				exit
+			fi
+		else
+            echo "$(date) Standalone Artifactory detected, continuing.." | tee -a $PARENT_SCRIPT_DIR/automate.log
 	fi
 	# TODO expired license check
 	# TODO maybe another check for linux commands before the wget
-	echo "Stopping Artifactory $MY_VERSION..."
+        echo "$(date) Stopping Artifactory $MY_VERSION..." | tee -a $PARENT_SCRIPT_DIR/automate.log
 	case ${INSTALL_TYPE} in
         Zip ) 
 			$ARTI_HOME/bin/artifactory.sh stop;
-			echo "Downloading Artifactory $LATEST_VERSION from Bintray..."
+			echo "$(date) Downloading Artifactory $LATEST_VERSION from Bintray..." | tee -a $PARENT_SCRIPT_DIR/automate.log
 			wget "https://dl.bintray.com/jfrog/artifactory-pro/org/artifactory/pro/jfrog-artifactory-pro/$LATEST_VERSION/jfrog-artifactory-pro-$LATEST_VERSION.zip" -O $ARTIS_DIR/jfrog-artifactory-pro-$LATEST_VERSION.zip
-			echo "Unzipping Artifactory $LATEST_VERSION"
+			echo "$(date) Unzipping Artifactory $LATEST_VERSION" | tee -a $PARENT_SCRIPT_DIR/automate.log
 			unzip -qq $ARTIS_DIR/jfrog-artifactory-pro-$LATEST_VERSION.zip -d $ARTIS_DIR/
 			;;
         Service ) echo "Currently not supported"; exit;;
@@ -77,23 +89,21 @@ upgrade_artifactory () {
 		esac
 	done
 	if [ "$EXTERNAL_DB_JAR" != "none" ]; then
-		echo "Backing up JDBC Driver $EXTERNAL_DB_JAR"
+		echo "$(date) Backing up JDBC Driver $EXTERNAL_DB_JAR" | tee -a $PARENT_SCRIPT_DIR/automate.log
 		cp $EXTERNAL_DB_JAR $ARTIS_DIR	
 	fi
-	echo "Upgrading Artifactory $MY_VERSION to $LATEST_VERSION..."
+        echo "$(date) Upgrading Artifactory $MY_VERSION to $LATEST_VERSION..." | tee -a $PARENT_SCRIPT_DIR/automate.log
 	case ${INSTALL_TYPE} in
-        Zip ) 
-			echo "STOP HERE"
-			exit 
+        Zip ) 		
 			#TODO HA zip upgrade - need to consider server.xml, artifactory.default file for zip install.
 			rm -r $ARTI_HOME/bin/ $ARTI_HOME/misc/ $ARTI_HOME/webapps/ $ARTI_HOME/tomcat/
 			cp -r $ARTIS_DIR/artifactory-pro-$LATEST_VERSION/bin $ARTIS_DIR/artifactory-pro-$LATEST_VERSION/misc $ARTIS_DIR/artifactory-pro-$LATEST_VERSION/webapps $ARTIS_DIR/artifactory-pro-$LATEST_VERSION/tomcat $ARTI_HOME/
-			 echo "Starting Artifactory $LATEST_VERSION..."
 			if [ "$EXTERNAL_DB_JAR" != "none" ]; then
-				echo "Restoring JDBC Driver $EXTERNAL_DB_JAR"
+                            echo "$(date) Restoring JDBC Driver $EXTERNAL_DB_JAR" | tee -a $PARENT_SCRIPT_DIR/automate.log
 				JAR_FILE=$(basename $EXTERNAL_DB_JAR)
 				cp $ARTIS_DIR/$JAR_FILE $ARTI_HOME/tomcat/lib/
 			fi
+                        echo "$(date) Starting Artifactory $LATEST_VERSION..." | tee -a $PARENT_SCRIPT_DIR/automate.log
 			$ARTI_HOME/bin/artifactory.sh start
 			rm -r $ARTIS_DIR/artifactory-pro-$LATEST_VERSION
 			rm $ARTIS_DIR/jfrog-artifactory-pro-$LATEST_VERSION.zip
@@ -104,33 +114,33 @@ upgrade_artifactory () {
         RPM ) 
 			rpm -U $ARTIS_DIR/jfrog-artifactory-pro-$LATEST_VERSION.rpm
 			if [ "$EXTERNAL_DB_JAR" != "none" ]; then
-				echo "Restoring JDBC Driver $EXTERNAL_DB_JAR"
+				echo "$(date) Restoring JDBC Driver $EXTERNAL_DB_JAR" | tee -a $PARENT_SCRIPT_DIR/automate.log
 				JAR_FILE=$(basename $EXTERNAL_DB_JAR)
 				cp $ARTIS_DIR/$JAR_FILE /opt/jfrog/artifactory/tomcat/lib/	
 			fi
-			echo "Starting Artifactory $LATEST_VERSION..."
+			echo "$(date) Starting Artifactory $LATEST_VERSION..." | tee -a $PARENT_SCRIPT_DIR/automate.log
 			systemctl start artifactory.service;
 			rm $ARTIS_DIR/jfrog-artifactory-pro-$LATEST_VERSION.rpm
 			;;
     esac
 
 	
-	echo "Pinging Artifactory..."
+    echo "$(date) Pinging Artifactory..." | tee -a $PARENT_SCRIPT_DIR/automate.log
 	GREENLIGHT=$(curl -su $ARTI_CREDS $ARTI_URL/api/system/ping)
 	TIMER=0
 	while [ "$GREENLIGHT" != "OK" ]; do
 		GREENLIGHT=$(curl -su $ARTI_CREDS $ARTI_URL/api/system/ping)
-		echo "Time spent waiting for Artifactory to start:$TIMER seconds..."
+                echo "$(date) Time spent waiting for Artifactory to start:$TIMER seconds..." | tee -a $PARENT_SCRIPT_DIR/automate.log
 		TIMER=$((TIMER + 2))
 		sleep 2
 	done
-	echo "Artifactory Status: $GREENLIGHT"
+	echo "$(date) Artifactory Status: $GREENLIGHT" | tee -a $PARENT_SCRIPT_DIR/automate.log
 	if [ "$GREENLIGHT" = "OK" ]; then
 		if [ "$BACKUP_CHECK" = "TRUE" ]; then
 			echo "Removing backup"
 			rm -r $ARTIS_DIR/artifactory-pro-latest-backup/
 		fi
-		echo "Upgrade to Artifactory $LATEST_VERSION complete."
+		echo "$(date) Upgrade to Artifactory $LATEST_VERSION complete." | tee -a $PARENT_SCRIPT_DIR/automate.log
 		if [ "$HA_CHECK" = "TRUE" ]; then
 			echo "Nodes upgraded to $LATEST_VERSION:"
 			curl -su $ARTI_CREDS $ARTI_URL/ui/highAvailability | jq -r '.[] | select(.version=="'$LATEST_VERSION'") | "\(.id) \(.role) \(.version)"'
