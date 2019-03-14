@@ -101,16 +101,18 @@ upgrade() {
 update_versions() {
     MY_ARTI_VERSION=$(jq -r '.artifactory' $PARENT_SCRIPT_DIR/json/serviceValues.json)
     MY_XRAY_VERSION=$(jq -r '.xray' $PARENT_SCRIPT_DIR/json/serviceValues.json)
+    LATEST_ARTI_VERSION=$(curl -s https://api.bintray.com/packages/jfrog/artifactory-pro/jfrog-artifactory-pro-zip/versions/_latest | jq -r '.name')
+    LATEST_XRAY_VERSION=$(curl -s https://api.bintray.com/packages/jfrog/xray/xray-docker/versions/_latest | jq -r '.name')
 
-    if [ ! -z "$MY_ARTI_VERSION" ]; then
+    if [[ ! -z "$MY_ARTI_VERSION" && $MY_ARTI_VERSION != $LATEST_ARTI_VERSION ]]; then
         NEW_ARTI_VERSION=$(curl -su $ARTI_CREDS $ARTI_URL/api/system/version | jq -r '.version')
         echo "$(date) Updating Artifactory version to $NEW_ARTI_VERSION in serviceValues.json" | tee -a $PARENT_SCRIPT_DIR/automate.log
-        echo "$(jq --arg version "$NEW_ARTI_VERSION" -r '.artifactory |= $version' $PARENT_SCRIPT_DIR/json/serviceValues.json)" > $PARENT_SCRIPT_DIR/json/serviceValues.json
+    	echo -e "{\"artifactory\":\""$NEW_ARTI_VERSION"\", \"xray\":\""$MY_XRAY_VERSION"\"}" > $PARENT_SCRIPT_DIR/json/serviceValues.json
     fi
-        if [ ! -z "$MY_XRAY_VERSION" ]; then
+    if [[ ! -z "$MY_XRAY_VERSION" && $MY_XRAY_VERSION != $LATEST_XRAY_VERSION ]]; then
         NEW_XRAY_VERSION=$(curl -s $XRAY_URL/api/v1/system/version | jq  -r '.xray_version')
         echo "$(date) Updating Xray version to $NEW_XRAY_VERSION in serviceValues.json" | tee -a $PARENT_SCRIPT_DIR/automate.log
-        echo "$(jq --arg version "$NEW_XRAY_VERSION" -r '.xray |= $version' $PARENT_SCRIPT_DIR/json/serviceValues.json)" > $PARENT_SCRIPT_DIR/json/serviceValues.json
+    	echo -e "{\"artifactory\":\""$MY_ARTI_VERSION"\", \"xray\":\""$NEW_XRAY_VERSION"\"}" > $PARENT_SCRIPT_DIR/json/serviceValues.json
     fi
 }
 
